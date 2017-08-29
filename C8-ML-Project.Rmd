@@ -1,0 +1,102 @@
+---
+title: "PRACTICAL MACHINE LEARNING - Predict Exercice Pattern/Manner"
+---
+
+#Background
+-------------------------------------------
+In this project, exercise data for 6 users has been provided. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. The objective of this project is to predict the manner in which they did the exercise. 
+
+#Data Import and basic processing
+
+The libraries required for this analysis is first loaded and the files are imported.
+
+```{r}
+library(caret)
+library(rpart)
+library(dplyr)
+library(randomForest)
+library(rpart.plot)
+library(RColorBrewer)
+
+#STEP 1 - importing the files
+setwd("D:/2017/Pers/Learning/Course 8 - Practical Machine Learning/Project")
+pmlTrain <- read.csv("pml-training.csv", header = TRUE)
+pmlTest <- read.csv("pml-testing.csv", header = TRUE)
+
+dim(pmlTrain)
+dim(pmlTest)
+```
+
+We observe that there are 160 variables in training and test data and we have to reduce the number of predictors to ensure that we are able to build the right model.
+
+## Reducing the number of predictors
+We do this in two steps
+First, we remove the columns which just have NAs. Then we use nearzerovariance function to remove the columns that predominantly has the same value in all the records.
+
+```{r}
+remNA <- colSums(is.na(pmlTrain))
+table(remNA)
+```
+
+Based on the table, we are able to oberve that there are 41 columns with NA values. We dont need to apply a filter of 80 or 90% NA as we see only two categories; either they have values or just NA. We go ahead and remove the columns that have NA values
+
+```{r}
+remNA <- (colSums(is.na(pmlTrain))==0)
+pmlTrainT1 <- pmlTrain[, remNA]
+# using near zero variance function
+NZV <- nearZeroVar(pmlTrainT1, saveMetrics = TRUE)
+pmlTrainT2 <- pmlTrainT1[, !NZV$nzv]
+pmlTrainT2 <- pmlTrainT2[,2:59]
+
+dim(pmlTrainT2)
+```
+
+In addition to the NA and zero variance approach, we also remove the first column (X) as this is nothing but the overall counter. 
+The preprocessing approach has helped us reduce the number of predictors to 58 from 160.
+
+## Applying the same transformation for test data as well
+
+```{r}
+RemNA <- (colSums(is.na(pmlTest))==0)
+pmlTestT1 <- pmlTest[, RemNA]
+NZV <- nearZeroVar(pmlTestT1, saveMetrics = TRUE)
+pmlTestT2 <- pmlTestT1[, !NZV$nzv]
+pmlTestT2 <- pmlTestT2[, 2:59]
+```
+
+# Building predictive models
+
+## Creating data partitions
+
+```{r}
+inTrain <- createDataPartition(pmlTrainT2$classe, p = 0.7, list = FALSE)
+training <- pmlTrainT2[inTrain, ]
+validation <- pmlTrainT2[-inTrain,]
+```
+
+## Random Forest model and applying it on Validation data set
+```{r}
+modRF1 <-train(classe~., data = training, method = "rf", trControl = trainControl(method  = "cv", 5), ntree = 250)
+predRF1 <- predict(modRF1, newdata = validation)
+CM1 <- confusionMatrix(validation$classe, predRF1)
+CM1
+```
+
+## Decision Tree
+```{r}
+modDT <- rpart(classe~., data = training, method = "class")
+predDT <- predict(modDT, validation, type = "class")
+CM2 <- confusionMatrix(predDT, validation$classe)
+CM2
+rpart.plot(modDT)
+```
+
+Random Forest has got a high accuracy of 99% Compared to Decision tree's accuracy of 87%. We will use Random Forest predictive model for determining the classe for the test data.
+
+## Applying the model on testing data
+
+```{r}
+predictTest <- predict(modRF1, pmlTestT2)
+predictTest
+```
+
